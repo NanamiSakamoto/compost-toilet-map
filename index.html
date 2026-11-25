@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>めぐるトイレ図鑑＆マップ | コンポストトイレ探訪と知恵のネットワーク</title>
+  
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
+  <!-- note採用フォントスタック・Webフォント（Noto Sans JP） -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Header -->
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="brand">
+        <div>
+          <h1 class="brand-title">めぐるトイレ図鑑 &amp; マップ</h1>
+          <p class="brand-subtitle">コンポストトイレ探訪録・実践知恵ネットワーク</p>
+        </div>
+      </div>
+      
+      <div class="header-actions">
+        <!-- View Switcher -->
+        <div class="view-tabs" role="tablist">
+          <button id="tab-map-btn" class="tab-btn active" role="tab" aria-selected="true" onclick="switchView('map')">
+            地図から探す
+          </button>
+          <button id="tab-tips-btn" class="tab-btn" role="tab" aria-selected="false" onclick="switchView('tips')">
+            工夫・困りごとから探す
+          </button>
+        </div>
+        
+        <!-- Add Button -->
+        <button class="add-toilet-btn" onclick="openAddModal()">
+          トイレを記録する
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Container -->
+  <main class="main-container">
+    <!-- VIEW 1: MAP VIEW -->
+    <section id="view-map" class="view-content active">
+      <div class="map-layout">
+        <!-- Sidebar: Spot list & Filter -->
+        <aside class="map-sidebar">
+          <div class="sidebar-search-box">
+            <input type="text" id="map-search-input" placeholder="地域、名前、方式で検索..." oninput="handleMapSearch()">
+            <div class="filter-chips" id="category-filter-chips">
+              <button class="chip active" data-cat="all" onclick="filterMapCategory('all')">すべて</button>
+              <button class="chip" data-cat="手動攪拌式" onclick="filterMapCategory('手動攪拌式')">手動攪拌</button>
+              <button class="chip" data-cat="電動バイオ式" onclick="filterMapCategory('電動バイオ式')">電動バイオ</button>
+              <button class="chip" data-cat="セパレート型" onclick="filterMapCategory('セパレート型')">セパレート(分離)</button>
+              <button class="chip" data-cat="手動ハンドル式" onclick="filterMapCategory('手動ハンドル式')">手動ハンドル</button>
+            </div>
+          </div>
+          
+          <div class="spot-count-bar">
+            <span>記録件数: <strong id="spot-count">0</strong> 件</span>
+            <span class="hint-text">選択して詳細を表示</span>
+          </div>
+
+          <div class="sidebar-cards-list" id="sidebar-cards-container">
+            <!-- Rendered by JS -->
+          </div>
+        </aside>
+
+        <!-- Map Container -->
+        <div class="map-wrapper">
+          <div id="map"></div>
+          <div class="map-floating-legend">
+            <span class="legend-item"><span class="dot-icon"></span> 農園・自然農</span>
+            <span class="legend-item"><span class="dot-icon"></span> 山岳・山小屋</span>
+            <span class="legend-item"><span class="dot-icon"></span> イベント・仮設</span>
+            <span class="legend-item"><span class="dot-icon"></span> キャンプ場・宿泊</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- VIEW 2: TIPS / TROUBLESHOOTING VIEW -->
+    <section id="view-tips" class="view-content">
+      <div class="tips-layout">
+        <div class="tips-header-hero">
+          <h2>工夫と困りごとの知恵</h2>
+          <p>現場の実践者たちが試行錯誤した水分・臭気・保温・基材の記録。<br>課題や工夫のキーワードから関連するトイレの事例を参照できます。</p>
+          
+          <div class="tips-filter-tags" id="tips-tag-filters">
+            <!-- Tag buttons rendered by JS -->
+          </div>
+        </div>
+
+        <div class="tips-grid" id="tips-grid-container">
+          <!-- Rendered by JS -->
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Community Gate Banner -->
+  <aside class="community-gate-banner">
+    <div class="banner-inner">
+      <div class="banner-badge">実践者と繋がる門</div>
+      <div class="banner-content">
+        <h3>コンポストトイレ・ネットワーク コミュニティ</h3>
+        <p>設置検討、維持管理の相談、現地訪問の問い合わせなど、実践者同士が直接対話できる場です。</p>
+      </div>
+      <div class="banner-actions">
+        <a href="https://discord.gg/fWmv6EbXS" target="_blank" rel="noopener noreferrer" class="btn btn-community">
+          Discordに参加する
+        </a>
+        <a href="https://www.facebook.com/groups/3056220634712109/" target="_blank" rel="noopener noreferrer" class="btn btn-community-sub">
+          Facebookグループ
+        </a>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MODAL: Toilet Detail View -->
+  <div id="detail-modal" class="modal-overlay" onclick="handleModalBackdropClick(event)">
+    <div class="modal-dialog detail-dialog">
+      <button class="modal-close-btn" onclick="closeDetailModal()">&times;</button>
+      <div id="detail-modal-body" class="detail-body">
+        <!-- Injected via JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Add New Toilet -->
+  <div id="add-modal" class="modal-overlay" onclick="handleAddModalBackdropClick(event)">
+    <div class="modal-dialog form-dialog">
+      <div class="form-dialog-header">
+        <button class="modal-close-btn" onclick="closeAddModal()">&times;</button>
+        <h3 id="form-modal-title">訪ねたトイレを記録する</h3>
+        <p class="form-desc" id="form-modal-desc">見学先や訪問先で記録したトイレ情報を登録できます。<br>情報の信頼性を担保するため、<strong>参考文献・出典</strong>および<strong>記録者への連絡先</strong>の入力をお願いしています。</p>
+      </div>
+
+      <form id="add-toilet-form" onsubmit="handleSaveToiletForm(event)">
+        <input type="hidden" id="f-edit-id" value="">
+        <!-- セクション1: 基本情報 -->
+        <div class="form-section-title">基本情報</div>
+        <div class="form-grid">
+          <div class="form-group full-width">
+            <label for="f-title">施設・場所名 <span class="req">*</span></label>
+            <input type="text" id="f-title" required placeholder="例: 循環ファーム 堆肥化トイレ">
+          </div>
+
+          <div class="form-group">
+            <label for="f-type">トイレの方式・型 <span class="req">*</span></label>
+            <select id="f-type" required>
+              <option value="手動攪拌式">手動攪拌式</option>
+              <option value="電動バイオ式">電動バイオ式</option>
+              <option value="セパレート型">セパレート型（尿便分離）</option>
+              <option value="手動ハンドル式">手動ハンドル回転式</option>
+              <option value="落下堆肥化式">落下堆肥化式</option>
+              <option value="その他">その他</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="f-location-name">地域・所在地 <span class="req">*</span></label>
+            <input type="text" id="f-location-name" required placeholder="例: 神奈川県相模原市">
+          </div>
+
+          <div class="form-group">
+            <label for="f-lat">緯度 (Latitude) <span class="req">*</span></label>
+            <input type="number" step="any" id="f-lat" required placeholder="例: 35.6022">
+          </div>
+
+          <div class="form-group">
+            <label for="f-lng">経度 (Longitude) <span class="req">*</span></label>
+            <input type="number" step="any" id="f-lng" required placeholder="例: 139.2133">
+            <button type="button" class="btn-location-helper" onclick="getCurrentLocation()">現在地を取得</button>
+          </div>
+
+          <div class="form-group full-width">
+            <label for="f-image">写真URL（省略時は初期画像が設定されます）</label>
+            <input type="url" id="f-image" placeholder="https://...">
+          </div>
+        </div>
+
+        <!-- セクション2: 工夫と困りごと -->
+        <div class="form-section-title" style="margin-top: 18px;">現場の知恵・困りごと</div>
+        <div class="form-grid">
+          <div class="form-group full-width">
+            <label for="f-trouble">工夫・困りごと・現場の課題 <span class="req">*</span></label>
+            <textarea id="f-trouble" rows="2" required placeholder="発生した課題や気づきを記述してください"></textarea>
+          </div>
+
+          <div class="form-group full-width">
+            <label for="f-action">実施した対応・解決策 <span class="req">*</span></label>
+            <textarea id="f-action" rows="2" required placeholder="実施した対策や試みを記述してください"></textarea>
+          </div>
+
+          <div class="form-group">
+            <label for="f-condition">設置環境・基材・利用頻度</label>
+            <input type="text" id="f-condition" placeholder="例: 標高800m、おがくず＋燻炭、1日約5回">
+          </div>
+
+          <div class="form-group">
+            <label for="f-tags">キーワードタグ（カンマ区切り）</label>
+            <input type="text" id="f-tags" placeholder="例: 寒さ対策, 臭気対策, 籾殻">
+          </div>
+        </div>
+
+        <!-- セクション3: 参考文献・信頼性確認（必須項目） -->
+        <div class="form-section-title" style="margin-top: 18px;">参考文献・情報の裏付け（必須）</div>
+        <div class="form-grid">
+          <div class="form-group full-width">
+            <label for="f-source">参考文献・情報の出典 <span class="req">*</span></label>
+            <input type="text" id="f-source" required placeholder="例: 〇〇農園公式ブログ 2024/07記事、自治体導入報告書、現地ヒアリング 等">
+            <span class="field-hint">情報の信頼性確認のため、出典元URL、書籍名、または現地での聞き取り元を必ずご記入ください。</span>
+          </div>
+
+          <div class="form-group">
+            <label for="f-verification">確認区分 <span class="req">*</span></label>
+            <select id="f-verification" required>
+              <option value="情報提供者本人に確認済み">情報提供者・実践者本人に確認済み</option>
+              <option value="公開資料で確認済み">公開資料・公式レポートで確認済み</option>
+              <option value="追加確認が必要">現地訪問・ヒアリングメモ（確認中）</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="f-status">公開範囲 <span class="req">*</span></label>
+            <select id="f-status" required>
+              <option value="公開可能">公開可能</option>
+              <option value="匿名化して公開可能">匿名化して公開可能（施設名・個人名を伏せる）</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- セクション4: 記録者・実践者連絡先（コミュニケーション確保） -->
+        <div class="form-section-title" style="margin-top: 18px;">記録者・実践者情報（コミュニケーションの確保）</div>
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="f-contributor-name">あなたの名前 / ニックネーム <span class="req">*</span></label>
+            <input type="text" id="f-contributor-name" required placeholder="例: 山田 / @yamada">
+          </div>
+
+          <div class="form-group">
+            <label for="f-contributor-contact">あなたの連絡先（Discord / メール / SNS） <span class="req">*</span></label>
+            <input type="text" id="f-contributor-contact" required placeholder="例: Discord: @yamada / mail@example.com">
+            <span class="field-hint">内容確認や追加ヒアリングの際に管理チームから連絡を取るために使用します。</span>
+          </div>
+
+          <div class="form-group">
+            <label for="f-practitioner">現地の践者・管理者名</label>
+            <input type="text" id="f-practitioner" placeholder="例: 運営担当者名 / 団体名">
+          </div>
+
+          <div class="form-group">
+            <label for="f-contact">現地の公開URL・サイト（繋がれる門）</label>
+            <input type="text" id="f-contact" placeholder="例: https://... / 見学案内ページ">
+          </div>
+        </div>
+
+        <div class="form-actions">
+          <button type="button" class="btn btn-secondary" onclick="closeAddModal()">キャンセル</button>
+          <button type="submit" id="form-submit-btn" class="btn btn-primary">確認して登録する</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  
+  <!-- Data & App logic -->
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
