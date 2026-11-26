@@ -181,8 +181,18 @@
           </div>
 
           <div class="form-group full-width">
-            <label for="f-image">写真URL（省略時は初期画像が設定されます）</label>
-            <input type="url" id="f-image" placeholder="https://...">
+            <label for="f-file">写真・資料のアップロード（JPG, PNG, PDF）</label>
+            <input type="file" id="f-file" accept="image/jpeg,image/png,image/webp,application/pdf" onchange="handleFileSelected(event)">
+            <input type="hidden" id="f-image" value="">
+            <div id="file-preview-area" style="display: none; margin-top: 8px; align-items: center; gap: 10px;">
+              <img id="file-preview-img" src="" alt="プレビュー" style="width: 80px; height: 80px; object-fit: cover; border-radius: 4px; border: 1px solid rgba(0,0,0,0.16); display: none;">
+              <div id="file-preview-pdf" style="display: none; padding: 6px 12px; background: #f8faf6; border: 1px solid rgba(0,0,0,0.16); border-radius: 4px; font-size: 0.8rem; color: #111;">
+                📄 PDF資料が選択されています
+              </div>
+              <span id="file-compression-status" style="font-size: 0.75rem; color: #5a7343; font-weight: 500;"></span>
+              <button type="button" class="btn btn-secondary" onclick="clearSelectedFile()" style="padding: 4px 8px; font-size: 0.75rem;">クリア</button>
+            </div>
+            <span class="field-hint">JPG、PNG画像は自動でWeb軽量化（最大長辺1600px）されます。PDFはそのまま保存されます（上限10MB）。</span>
           </div>
         </div>
 

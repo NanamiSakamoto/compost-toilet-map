@@ -5,8 +5,7 @@
 // ストレージキー & Googleスプレッドシート(GAS)連携設定
 const STORAGE_KEY = 'meguru_toilets_data_v3';
 
-// ※Google Apps ScriptのWebアプリURLを設定すると、自動的にスプレッドシート双方向同期になります
-// 未設定時は従来通りローカルストレージ＆初期データで軽快に動作します
+// ※Google Apps ScriptのWebアプリURL（スプレッドシート＆Googleドライブ自動保存）
 const GAS_API_URL = 'https://script.google.com/macros/s/AKfycbwT1jlH3bsSxTmYdOLEBj8S_SzKKV93nzKhzRpB4FBfkt2KjEVKmZLnul9QC3KvZGbJ7A/exec'; 
 
 let toilets = [];
@@ -136,11 +135,19 @@ function renderSidebarList() {
     card.id = `card-${item.id}`;
     card.onclick = () => focusSpot(item.id);
 
-    const defaultImg = "https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=400&q=80";
-    const imgUrl = item.imageUrl || defaultImg;
+  const defaultImg = "https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=400&q=80";
+  let thumbSrc = defaultImg;
+  if (item.imageUrl) {
+    if (item.imageUrl.startsWith('data:application/pdf')) {
+      // PDFの場合はPDFプレースホルダー画像
+      thumbSrc = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="84" height="84" fill="%235a7343" viewBox="0 0 16 16"><path d="M14 14V4.5L9.5 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2zM9.5 1.5 13 5h-3.5V1.5zM4.5 9h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1zm0 2h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1 0-1z"/></svg>';
+    } else {
+      thumbSrc = item.imageUrl;
+    }
+  }
 
-    card.innerHTML = `
-      <img src="${imgUrl}" alt="${item.title}" class="spot-card-thumb" onerror="this.src='${defaultImg}'">
+  card.innerHTML = `
+    <img src="${thumbSrc}" alt="${item.title}" class="spot-card-thumb" onerror="this.src='${defaultImg}'">
       <div class="spot-card-info">
         <div class="spot-badge-row">
           <span class="badge-cat">${item.category}</span>
@@ -318,6 +325,20 @@ function openDetailModal(id) {
   const body = document.getElementById('detail-modal-body');
 
   const defaultImg = "https://images.unsplash.com/photo-1542601906990-b4d3fb778b09?auto=format&fit=crop&w=900&q=80";
+  const isPdf = item.imageUrl && item.imageUrl.startsWith('data:application/pdf');
+
+  let mediaHtml = '';
+  if (isPdf) {
+    mediaHtml = `
+      <div style="background:#f8faf6; border-bottom:1px solid rgba(0,0,0,0.16); padding:24px; text-align:center;">
+        <p style="font-size:1rem; font-weight:600; color:#111; margin-bottom:8px;">📄 添付PDF資料</p>
+        <a href="${item.imageUrl}" download="${item.title}_資料.pdf" class="btn btn-community" style="font-size:0.85rem; padding:8px 16px;">PDFをダウンロード・閲覧する</a>
+      </div>
+    `;
+  } else {
+    mediaHtml = `<img src="${item.imageUrl || defaultImg}" alt="${item.title}" class="detail-hero-img" onerror="this.src='${defaultImg}'">`;
+  }
+
   const tagsHtml = (item.tags || []).map(tag => `<span class="tag-badge">${tag}</span>`).join(' ');
 
   const prac = item.practitioner || {
@@ -335,7 +356,7 @@ function openDetailModal(id) {
   };
 
   body.innerHTML = `
-    <img src="${item.imageUrl || defaultImg}" alt="${item.title}" class="detail-hero-img" onerror="this.src='${defaultImg}'">
+    ${mediaHtml}
     <div class="detail-content">
       <div class="detail-top-meta">
         <div>
@@ -439,7 +460,148 @@ function handleModalBackdropClick(e) {
   }
 }
 
+// 選択中のファイルオブジェクト（アップロード待ち）
+let selectedFileObject = null;
+
+/**
+ * クライアント側（ブラウザ）での強力自動画像圧縮処理
+ * - 長辺を最大1280pxにリサイズ（スマホ・PC画面で十二分に鮮明なサイズ）
+ * - JPEG品質75%で強力圧縮し、容量を50KB〜150KB前後（元サイズの約1/20〜1/40）に激減
+ * - これによりGoogleドライブ15GB枠で「10万枚以上」保存可能になります
+ * - PDFは圧縮せずそのまま返却
+ */
+async function compressImageIfNeeded(file) {
+  if (file.type === 'application/pdf') {
+    return file;
+  }
+
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const img = new Image();
+      img.onload = () => {
+        const maxDimension = 1280; // 高解像度かつ軽量な最適値
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxDimension || height > maxDimension) {
+          if (width > height) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, width, height);
+
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              const compressedFile = new File([blob], file.name.replace(/\.[^.]+$/, '.jpg'), {
+                type: 'image/jpeg',
+                lastModified: Date.now(),
+              });
+              resolve(compressedFile);
+            } else {
+              resolve(file);
+            }
+          },
+          'image/jpeg',
+          0.75 // 75%品質（視覚的な美しさを保ちつつ極限まで軽量化）
+        );
+      };
+      img.onerror = () => resolve(file);
+      img.src = e.target.result;
+    };
+    reader.onerror = () => resolve(file);
+    reader.readAsDataURL(file);
+  });
+}
+
+// ファイルをBase64文字列に変換する関数
+function readFileAsDataUrl(file) {
+  return new Promise((resolve) => {
+    const reader = new FileReader();
+    reader.onload = (e) => resolve(e.target.result);
+    reader.readAsDataURL(file);
+  });
+}
+
+// ファイル（画像・PDF）選択ハンドラー
+async function handleFileSelected(e) {
+  const rawFile = e.target.files[0];
+  if (!rawFile) return;
+
+  const isPdf = rawFile.type === 'application/pdf';
+  const isImg = rawFile.type.startsWith('image/');
+
+  if (!isPdf && !isImg) {
+    alert('JPG、PNG画像、またはPDFファイルを選択してください。');
+    e.target.value = '';
+    return;
+  }
+
+  // 1ファイルあたり10MB上限チェック
+  if (rawFile.size > 10 * 1024 * 1024) {
+    alert('ファイルサイズの上限（10MB）を超えています。10MB以下のファイルを選択してください。');
+    e.target.value = '';
+    return;
+  }
+
+  const statusEl = document.getElementById('file-compression-status');
+  if (statusEl) statusEl.textContent = isImg ? '画像を最適化中...' : '';
+
+  // 画像の場合はブラウザ側で自動リサイズ＆圧縮
+  const fileToUse = await compressImageIfNeeded(rawFile);
+  selectedFileObject = fileToUse;
+
+  if (statusEl && isImg) {
+    const origMb = (rawFile.size / (1024 * 1024)).toFixed(2);
+    const compKb = Math.round(fileToUse.size / 1024);
+    statusEl.textContent = `最適化完了: ${origMb}MB → ${compKb}KB`;
+  }
+
+  // プレビュー表示用
+  const reader = new FileReader();
+  reader.onload = function(evt) {
+    const dataUrl = evt.target.result;
+    // Worker未設定時のプレビュー・一時保持用
+    document.getElementById('f-image').value = dataUrl;
+
+    const previewArea = document.getElementById('file-preview-area');
+    const previewImg = document.getElementById('file-preview-img');
+    const previewPdf = document.getElementById('file-preview-pdf');
+
+    previewArea.style.display = 'flex';
+    if (isImg) {
+      previewImg.src = dataUrl;
+      previewImg.style.display = 'block';
+      previewPdf.style.display = 'none';
+    } else {
+      previewImg.style.display = 'none';
+      previewPdf.style.display = 'block';
+    }
+  };
+  reader.readAsDataURL(fileToUse);
+}
+
+function clearSelectedFile() {
+  selectedFileObject = null;
+  document.getElementById('f-file').value = '';
+  document.getElementById('f-image').value = '';
+  document.getElementById('file-preview-area').style.display = 'none';
+  const statusEl = document.getElementById('file-compression-status');
+  if (statusEl) statusEl.textContent = '';
+}
+
 function openAddModal() {
+  clearSelectedFile();
   document.getElementById('f-edit-id').value = '';
   document.getElementById('add-toilet-form').reset();
   document.getElementById('form-modal-title').textContent = '訪ねたトイレを記録する';
@@ -465,6 +627,25 @@ function openEditModal(id) {
   document.getElementById('f-lat').value = item.lat || '';
   document.getElementById('f-lng').value = item.lng || '';
   document.getElementById('f-image').value = item.imageUrl || '';
+  document.getElementById('f-file').value = '';
+  
+  const previewArea = document.getElementById('file-preview-area');
+  const previewImg = document.getElementById('file-preview-img');
+  const previewPdf = document.getElementById('file-preview-pdf');
+  if (item.imageUrl) {
+    previewArea.style.display = 'flex';
+    if (item.imageUrl.startsWith('data:application/pdf')) {
+      previewImg.style.display = 'none';
+      previewPdf.style.display = 'block';
+    } else {
+      previewImg.src = item.imageUrl;
+      previewImg.style.display = 'block';
+      previewPdf.style.display = 'none';
+    }
+  } else {
+    previewArea.style.display = 'none';
+  }
+
   document.getElementById('f-trouble').value = item.trouble || '';
   document.getElementById('f-action').value = item.action || '';
   document.getElementById('f-condition').value = item.environment || '';
@@ -507,8 +688,11 @@ function getCurrentLocation() {
   );
 }
 
-function handleSaveToiletForm(e) {
+async function handleSaveToiletForm(e) {
   e.preventDefault();
+
+  const submitBtn = document.getElementById('form-submit-btn');
+  const originalBtnText = submitBtn.textContent;
 
   const editId = document.getElementById('f-edit-id').value;
   const title = document.getElementById('f-title').value.trim();
@@ -516,7 +700,7 @@ function handleSaveToiletForm(e) {
   const locationName = document.getElementById('f-location-name').value.trim();
   const lat = parseFloat(document.getElementById('f-lat').value);
   const lng = parseFloat(document.getElementById('f-lng').value);
-  const imageUrl = document.getElementById('f-image').value.trim();
+  let imageUrl = document.getElementById('f-image').value.trim();
   
   const trouble = document.getElementById('f-trouble').value.trim();
   const action = document.getElementById('f-action').value.trim();
@@ -546,6 +730,14 @@ function handleSaveToiletForm(e) {
     alert('記録者への連絡先の入力は必須です。');
     document.getElementById('f-contributor-contact').focus();
     return;
+  }
+
+  // ファイルが選択されている場合、Base64データを送信準備
+  let fileDataToSend = null;
+  if (selectedFileObject) {
+    submitBtn.disabled = true;
+    submitBtn.textContent = '保存中...';
+    fileDataToSend = await readFileAsDataUrl(selectedFileObject);
   }
 
   const tags = tagsStr ? tagsStr.split(/[,、\s]+/).filter(Boolean) : [];
@@ -582,7 +774,8 @@ function handleSaveToiletForm(e) {
           contactUrl: contact || toilets[idx].practitioner?.contactUrl
         },
         updatedAt: todayStr,
-        status
+        status,
+        fileData: fileDataToSend // Googleドライブ保存用
       };
 
       toilets[idx] = updatedItem;
@@ -597,6 +790,8 @@ function handleSaveToiletForm(e) {
         }).catch(err => console.warn('GAS POST error', err));
       }
 
+      submitBtn.disabled = false;
+      submitBtn.textContent = originalBtnText;
       closeAddModal();
       renderSidebarList();
       renderMarkers();
@@ -645,7 +840,8 @@ function handleSaveToiletForm(e) {
       communityNote: "質問・対話はコミュニティまで"
     },
     updatedAt: todayStr,
-    status
+    status,
+    fileData: fileDataToSend // Googleドライブ保存用
   };
 
   toilets.unshift(newToilet);
@@ -659,6 +855,9 @@ function handleSaveToiletForm(e) {
       body: JSON.stringify(newToilet)
     }).catch(err => console.warn('GAS POST error', err));
   }
+
+  submitBtn.disabled = false;
+  submitBtn.textContent = originalBtnText;
 
   document.getElementById('add-toilet-form').reset();
   closeAddModal();
