@@ -218,6 +218,18 @@ body {
   height: 3px;
 }
 
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.filter-group-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--c-gray-muted);
+}
+
 .chip {
   white-space: nowrap;
   font-size: 0.75rem;

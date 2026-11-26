@@ -53,12 +53,31 @@
         <aside class="map-sidebar">
           <div class="sidebar-search-box">
             <input type="text" id="map-search-input" placeholder="地域、名前、方式で検索..." oninput="handleMapSearch()">
-            <div class="filter-chips" id="category-filter-chips">
-              <button class="chip active" data-cat="all" onclick="filterMapCategory('all')">すべて</button>
-              <button class="chip" data-cat="手動攪拌式" onclick="filterMapCategory('手動攪拌式')">手動攪拌</button>
-              <button class="chip" data-cat="電動バイオ式" onclick="filterMapCategory('電動バイオ式')">電動バイオ</button>
-              <button class="chip" data-cat="セパレート型" onclick="filterMapCategory('セパレート型')">セパレート(分離)</button>
-              <button class="chip" data-cat="手動ハンドル式" onclick="filterMapCategory('手動ハンドル式')">手動ハンドル</button>
+            
+            <!-- 設置環境・用途フィルター -->
+            <div class="filter-group">
+              <span class="filter-group-label">設置場所・用途</span>
+              <div class="filter-chips" id="usage-filter-chips">
+                <button class="chip active" data-filter="all" onclick="filterUsageType('all')">すべて</button>
+                <button class="chip" data-filter="農園・自然農" onclick="filterUsageType('農園・自然農')">農園・自然農</button>
+                <button class="chip" data-filter="山岳・山小屋" onclick="filterUsageType('山岳・山小屋')">山岳・山小屋</button>
+                <button class="chip" data-filter="キャンプ場・宿泊" onclick="filterUsageType('キャンプ場・宿泊')">キャンプ場・宿泊</button>
+                <button class="chip" data-filter="イベント・仮設" onclick="filterUsageType('イベント・仮設')">イベント・仮設</button>
+                <button class="chip" data-filter="常設" onclick="filterUsageType('常設')">常設</button>
+              </div>
+            </div>
+
+            <!-- トイレ方式フィルター -->
+            <div class="filter-group" style="margin-top: 6px;">
+              <span class="filter-group-label">方式</span>
+              <div class="filter-chips" id="category-filter-chips">
+                <button class="chip active" data-cat="all" onclick="filterMapCategory('all')">すべて</button>
+                <button class="chip" data-cat="手動攪拌式" onclick="filterMapCategory('手動攪拌式')">手動攪拌</button>
+                <button class="chip" data-cat="電動バイオ式" onclick="filterMapCategory('電動バイオ式')">電動バイオ</button>
+                <button class="chip" data-cat="セパレート型" onclick="filterMapCategory('セパレート型')">セパレート(分離)</button>
+                <button class="chip" data-cat="手動ハンドル式" onclick="filterMapCategory('手動ハンドル式')">手動ハンドル</button>
+                <button class="chip" data-cat="落下堆肥化式" onclick="filterMapCategory('落下堆肥化式')">落下堆肥化</button>
+              </div>
             </div>
           </div>
           
@@ -154,6 +173,18 @@
               <option value="セパレート型">セパレート型（尿便分離）</option>
               <option value="手動ハンドル式">手動ハンドル回転式</option>
               <option value="落下堆肥化式">落下堆肥化式</option>
+              <option value="その他">その他</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="f-usage-type">設置場所・用途区分 <span class="req">*</span></label>
+            <select id="f-usage-type" required>
+              <option value="農園・自然農">農園・自然農</option>
+              <option value="山岳・山小屋">山岳・山小屋</option>
+              <option value="キャンプ場・宿泊">キャンプ場・宿泊</option>
+              <option value="常設">常設（住宅・常設施設など）</option>
+              <option value="イベント・仮設">イベント・仮設</option>
               <option value="その他">その他</option>
             </select>
           </div>

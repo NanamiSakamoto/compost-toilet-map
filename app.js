@@ -12,6 +12,7 @@ let toilets = [];
 let map = null;
 let markers = {};
 let currentCategoryFilter = 'all';
+let currentUsageFilter = 'all';
 let currentSearchQuery = '';
 let currentTagFilter = 'all';
 
@@ -164,23 +165,54 @@ function renderSidebarList() {
 
 function getFilteredToilets() {
   return toilets.filter(item => {
+    // 方式フィルター
     const matchCat = (currentCategoryFilter === 'all') || (item.category === currentCategoryFilter);
+
+    // 用途・設置場所フィルター
+    let matchUsage = true;
+    if (currentUsageFilter !== 'all') {
+      const u = currentUsageFilter;
+      const envText = (item.environment || '') + ' ' + (item.usageType || '') + ' ' + (item.title || '') + ' ' + (item.category || '');
+      if (u === '常設') {
+        matchUsage = envText.includes('常設') || envText.includes('家庭') || envText.includes('施設') || (!envText.includes('イベント') && !envText.includes('仮設'));
+      } else if (u === '農園・自然農') {
+        matchUsage = envText.includes('農園') || envText.includes('ファーム') || envText.includes('自然農') || item.categoryType === 'farm';
+      } else if (u === '山岳・山小屋') {
+        matchUsage = envText.includes('山岳') || envText.includes('山小屋') || envText.includes('標高') || item.categoryType === 'mountain';
+      } else if (u === 'キャンプ場・宿泊') {
+        matchUsage = envText.includes('キャンプ') || envText.includes('宿泊') || item.categoryType === 'camp';
+      } else if (u === 'イベント・仮設') {
+        matchUsage = envText.includes('イベント') || envText.includes('フェス') || envText.includes('仮設') || item.categoryType === 'event';
+      }
+    }
+
+    // 検索語フィルター
     const q = currentSearchQuery.toLowerCase();
     const matchSearch = !q || (
       item.title.toLowerCase().includes(q) ||
       item.locationName.toLowerCase().includes(q) ||
       item.category.toLowerCase().includes(q) ||
+      (item.environment && item.environment.toLowerCase().includes(q)) ||
       (item.summary && item.summary.toLowerCase().includes(q)) ||
       (item.trouble && item.trouble.toLowerCase().includes(q)) ||
       (item.source && item.source.toLowerCase().includes(q)) ||
       (item.tags && item.tags.some(t => t.toLowerCase().includes(q)))
     );
-    return matchCat && matchSearch;
+    return matchCat && matchUsage && matchSearch;
   });
 }
 
 function handleMapSearch() {
   currentSearchQuery = document.getElementById('map-search-input').value.trim();
+  renderSidebarList();
+  renderMarkers();
+}
+
+function filterUsageType(filterVal) {
+  currentUsageFilter = filterVal;
+  document.querySelectorAll('#usage-filter-chips .chip').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.filter === filterVal);
+  });
   renderSidebarList();
   renderMarkers();
 }
@@ -623,6 +655,9 @@ function openEditModal(id) {
 
   document.getElementById('f-title').value = item.title || '';
   document.getElementById('f-type').value = item.category || '手動攪拌式';
+  if (document.getElementById('f-usage-type')) {
+    document.getElementById('f-usage-type').value = item.usageType || (item.categoryType === 'mountain' ? '山岳・山小屋' : (item.categoryType === 'camp' ? 'キャンプ場・宿泊' : (item.categoryType === 'event' ? 'イベント・仮設' : '農園・自然農')));
+  }
   document.getElementById('f-location-name').value = item.locationName || '';
   document.getElementById('f-lat').value = item.lat || '';
   document.getElementById('f-lng').value = item.lng || '';
@@ -697,6 +732,7 @@ async function handleSaveToiletForm(e) {
   const editId = document.getElementById('f-edit-id').value;
   const title = document.getElementById('f-title').value.trim();
   const category = document.getElementById('f-type').value;
+  const usageType = document.getElementById('f-usage-type') ? document.getElementById('f-usage-type').value : '農園・自然農';
   const locationName = document.getElementById('f-location-name').value.trim();
   const lat = parseFloat(document.getElementById('f-lat').value);
   const lng = parseFloat(document.getElementById('f-lng').value);
@@ -751,6 +787,7 @@ async function handleSaveToiletForm(e) {
         ...toilets[idx],
         title,
         category,
+        usageType,
         locationName,
         lat,
         lng,
@@ -811,7 +848,8 @@ async function handleSaveToiletForm(e) {
     id: newId,
     title,
     category,
-    categoryType: category.includes('バイオ') ? 'mountain' : (category.includes('セパレート') ? 'event' : 'farm'),
+    usageType,
+    categoryType: usageType === '山岳・山小屋' ? 'mountain' : (usageType === 'イベント・仮設' ? 'event' : (usageType === 'キャンプ場・宿泊' ? 'camp' : 'farm')),
     locationName,
     lat,
     lng,
